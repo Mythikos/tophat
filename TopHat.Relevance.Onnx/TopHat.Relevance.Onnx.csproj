@@ -10,10 +10,30 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+    <Title>TopHat.Relevance.Onnx</Title>
+    <PackageTags>AI;Context Optimization;LLM;CCR;Relevance;Onnx;</PackageTags>
+    <PackageProjectUrl>https://github.com/Mythikos/tophat</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Mythikos/tophat</RepositoryUrl>
+    <PackageIcon>tophat-logo-small.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>Reduces your LLM token spend by optimizing the context layer in-flight. .NET HttpClient handler for Anthropic and OpenAI with on-demand retrieval.</Description>
+    <Authors>Mythikos</Authors>
   </PropertyGroup>
 
   <ItemGroup>
     <InternalsVisibleTo Include="TopHat.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\tophat-logo-small.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

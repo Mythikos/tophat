@@ -20,6 +20,7 @@
     <PackageTags>AI;Context Optimization;LLM;CCR;</PackageTags>
     <PackageProjectUrl>https://github.com/Mythikos/tophat</PackageProjectUrl>
     <Authors>Mythikos</Authors>
+    <PackageId>Mythikos.$(AssemblyName)</PackageId>
   </PropertyGroup>
 
   <ItemGroup>

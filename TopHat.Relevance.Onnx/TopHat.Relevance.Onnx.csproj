@@ -19,6 +19,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <Description>Reduces your LLM token spend by optimizing the context layer in-flight. .NET HttpClient handler for Anthropic and OpenAI with on-demand retrieval.</Description>
     <Authors>Mythikos</Authors>
+    <PackageId>Mythikos.$(AssemblyName)</PackageId>
   </PropertyGroup>
 
   <ItemGroup>

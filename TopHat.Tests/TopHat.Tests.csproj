@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!-- Tests intentionally use broad catches, direct ctor invocation, and xunit's discovery requires public test classes; relax here. -->
+    <NoWarn>$(NoWarn);CA1515;CA1848;CA1707;CA2007;CA1031;CA2022;CA2016;CA1861</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TopHat\TopHat.csproj" />
+    <ProjectReference Include="..\TopHat.Relevance.BM25\TopHat.Relevance.BM25.csproj" />
+    <ProjectReference Include="..\TopHat.Relevance.Onnx\TopHat.Relevance.Onnx.csproj" />
+    <ProjectReference Include="..\TopHat.Tokenizers.OpenAI\TopHat.Tokenizers.OpenAI.csproj" />
+    <ProjectReference Include="..\TopHat.Tokenizers.Anthropic\TopHat.Tokenizers.Anthropic.csproj" />
+  </ItemGroup>
+
+</Project>

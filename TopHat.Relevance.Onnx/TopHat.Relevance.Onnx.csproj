@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TopHat.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TopHat\TopHat.csproj" />
+    <ProjectReference Include="..\TopHat.Relevance.BM25\TopHat.Relevance.BM25.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      ONNX Runtime is pinned to 1.19.2 exactly. Versions 1.20+ BUILD fine on .NET 10 but crash
+      at inference time (InferenceSession.Run) due to memory-layout changes introduced after
+      1.19.2. Do not upgrade without end-to-end inference testing on net10.0.
+    -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="[1.19.2]" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" Version="1.0.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>

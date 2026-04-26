@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+		<AnalysisLevel>latest</AnalysisLevel>
+		<AnalysisMode>Recommended</AnalysisMode>
+		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<!-- NU1903: Microsoft.ML.Tokenizers transitively pulls Microsoft.Bcl.Memory which currently has a NuGet advisory.
+		     Not actionable from our side without pinning a newer System.Memory; accept the warning here. -->
+		<NoWarn>$(NoWarn);CS1591;NU1903</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="TopHat.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\TopHat\TopHat.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+		<PackageReference Include="Microsoft.ML.Tokenizers" Version="2.0.0" />
+		<PackageReference Include="Microsoft.ML.Tokenizers.Data.Cl100kBase" Version="2.0.0" />
+		<PackageReference Include="Microsoft.ML.Tokenizers.Data.O200kBase" Version="2.0.0" />
+	</ItemGroup>
+
+</Project>

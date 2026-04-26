@@ -1,0 +1,13 @@
+<Solution>
+  <Project Path="TopHat/TopHat.csproj" />
+  <Project Path="TopHat.Relevance.BM25/TopHat.Relevance.BM25.csproj" />
+  <Project Path="TopHat.Relevance.Onnx/TopHat.Relevance.Onnx.csproj" />
+  <Project Path="TopHat.Tests/TopHat.Tests.csproj" />
+  <Project Path="TopHat.Benchmarks/TopHat.Benchmarks.csproj" />
+  <Project Path="Resources/Samples/TopHat.Samples.AnthropicConsole/TopHat.Samples.AnthropicConsole.csproj" />
+  <Project Path="Resources/Samples/TopHat.Samples.TransformsConsole/TopHat.Samples.TransformsConsole.csproj" />
+  <Project Path="Resources/Samples/TopHat.Samples.CacheAlignerConsole/TopHat.Samples.CacheAlignerConsole.csproj" />
+  <Project Path="Resources/Samples/TopHat.Samples.OpenAiPromptCachingConsole/TopHat.Samples.OpenAiPromptCachingConsole.csproj" />
+  <Project Path="Resources/Samples/TopHat.Samples.JsonContextCompressorConsole/TopHat.Samples.JsonContextCompressorConsole.csproj" />
+  <Project Path="Resources/Samples/TopHat.Samples.CompressionEval/TopHat.Samples.CompressionEval.csproj" />
+</Solution>

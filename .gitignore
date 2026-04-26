@@ -1,0 +1,40 @@
+# ---- .NET build output ----
+bin/
+obj/
+*.user
+*.userprefs
+*.suo
+*.pdb
+*.dll
+*.exe
+
+# ---- Visual Studio / Rider / VS Code ----
+.vs/
+.idea/
+.vscode/
+*.swp
+
+# ---- NuGet ----
+packages/
+*.nupkg
+*.snupkg
+.nuget/
+
+# ---- Test output ----
+TestResults/
+*.trx
+*.coverage
+coverage/
+
+# ---- BenchmarkDotNet ----
+# Raw artifacts are disposable. The curated M2 baseline lives under
+# TopHat.Benchmarks/results/ and IS committed.
+BenchmarkDotNet.Artifacts/
+
+# ---- OS / editor noise ----
+Thumbs.db
+.DS_Store
+*~
+
+# ---- Custom ----
+Resources/

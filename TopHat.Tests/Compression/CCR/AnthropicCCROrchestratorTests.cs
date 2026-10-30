@@ -29,10 +29,12 @@ public sealed class AnthropicCCROrchestratorTests
 		return (new AnthropicCCROrchestrator(store, options), store);
 	}
 
-	private static HttpRequestMessage Request() => new (HttpMethod.Post, "https://api.anthropic.com/v1/messages")
+	private static HttpRequestMessage Request()
 	{
-		Content = new StringContent(RequestBody, Encoding.UTF8, "application/json"),
-	};
+		var body = JsonNode.Parse(RequestBody)!.AsObject();
+		body["tools"] = new JsonArray(CCRToolDefinition.BuildAnthropicToolDefinition());
+		return new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages") { Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json") };
+	}
 
 	private static HttpResponseMessage JsonResponse(string body) => new (HttpStatusCode.OK)
 	{
@@ -137,7 +139,7 @@ public sealed class AnthropicCCROrchestratorTests
 	}
 
 	[Fact]
-	public async Task ForeignToolUseAlongsideRetrieval_PassesThroughUnchanged()
+	public async Task ForeignToolUseAlongsideRetrieval_ReturnsOnlyCallerTool()
 	{
 		var (orchestrator, store) = BuildOrchestrator();
 		store.Store("k", new JsonNode[] { new JsonObject { ["id"] = 1 } });
@@ -160,6 +162,10 @@ public sealed class AnthropicCCROrchestratorTests
 		var result = await orchestrator.OrchestrateAsync(context, CancellationToken.None);
 
 		Assert.Same(initial, result);
+		var body = JsonNode.Parse(await result.Content.ReadAsStringAsync())!.AsObject();
+		var remaining = Assert.Single(body["content"]!.AsArray());
+		Assert.Equal("user_defined_tool", remaining!["name"]!.GetValue<string>());
+		Assert.Equal("tu_2", remaining["id"]!.GetValue<string>());
 	}
 
 	[Fact]
@@ -179,7 +185,7 @@ public sealed class AnthropicCCROrchestratorTests
 	}
 
 	[Fact]
-	public async Task StreamingContentType_PassesThrough()
+	public async Task StreamingContentType_AfterPrivateAdvertisement_IsRejected()
 	{
 		var (orchestrator, _) = BuildOrchestrator();
 		using var request = Request();
@@ -189,13 +195,11 @@ public sealed class AnthropicCCROrchestratorTests
 		};
 		var context = new CCROrchestrationContext(request, streaming, (_, _) => throw new InvalidOperationException(), "test", NullLogger.Instance);
 
-		var result = await orchestrator.OrchestrateAsync(context, CancellationToken.None);
-
-		Assert.Same(streaming, result);
+		await Assert.ThrowsAsync<HttpRequestException>(async () => await orchestrator.OrchestrateAsync(context, CancellationToken.None));
 	}
 
 	[Fact]
-	public async Task MaxIterations_StopsLoopingAndReturnsLastResponse()
+	public async Task MaxIterations_PerformsFinalCompletionAndRemovesRepeatedRetrieval()
 	{
 		var (orchestrator, store) = BuildOrchestrator(new CCROptions { MaxIterations = 2 });
 		store.Store("k", new JsonNode[] { new JsonObject { ["id"] = 1 } });
@@ -213,13 +217,15 @@ public sealed class AnthropicCCROrchestratorTests
 
 		var result = await orchestrator.OrchestrateAsync(context, CancellationToken.None);
 
-		// MaxIterations = 2 → processes initial + 1 follow-up, then hits budget cap on iteration 2.
-		Assert.Equal(2, callCount);
+		// Two retrieval follow-ups plus one final completion communicating exhaustion.
+		Assert.Equal(3, callCount);
 
-		// The final response still has the pathological tool_use — orchestrator didn't silently
-		// sanitize it. The client sees it as an "unknown tool" failure; terminal and observable.
+		// Repeated private tool calls cannot escape the final response boundary.
 		var finalBody = JsonNode.Parse(await result.Content.ReadAsStringAsync())!.AsObject();
-		Assert.Equal("tool_use", finalBody["stop_reason"]!.GetValue<string>());
+		Assert.Equal("end_turn", finalBody["stop_reason"]!.GetValue<string>());
+		var text = Assert.Single(finalBody["content"]!.AsArray());
+		Assert.Equal("text", text!["type"]!.GetValue<string>());
+		Assert.Equal("Let me check.", text["text"]!.GetValue<string>());
 	}
 
 	[Fact]

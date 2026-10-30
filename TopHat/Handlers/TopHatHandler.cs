@@ -94,17 +94,30 @@ public sealed class TopHatHandler : DelegatingHandler
         this.DetectTarget(request, context);
         await this._inspector.InspectAsync(request, context, cancellationToken).ConfigureAwait(false);
 
+		this._ccrOrchestrators.TryGetValue(context.Target, out var ccr);
+		if (ccr is not null || CCRRequestState.HasRetryProvenance(request))
+		{
+			await CCRRequestBoundary.InspectAsync(request, context, this._options.Value.MaxBodyInspectionBytes, cancellationToken).ConfigureAwait(false);
+			if (ccr is not null)
+			{
+				context.CcrState = new CCRRequestState();
+				context.CcrState.CaptureInitialDefinition(context.JsonBody as System.Text.Json.Nodes.JsonObject, context.Target);
+			}
+		}
+
         if (this._transformPipeline is not null)
         {
             await this._transformPipeline.RunAsync(request, context, cancellationToken).ConfigureAwait(false);
         }
+
+		var canOrchestrate = ccr is not null && await CCRRequestBoundary.FinalizeAsync(request, context, this._options.Value.MaxBodyInspectionBytes, cancellationToken).ConfigureAwait(false);
 
         UpdateStreamingTag(request, context);
         ObserveRequest(request, context);
 
         var response = await this.SendUpstreamAsync(request, context, cancellationToken).ConfigureAwait(false);
 
-        if (this._ccrOrchestrators.Count > 0 && this._ccrOrchestrators.TryGetValue(context.Target, out var ccr))
+        if (canOrchestrate)
         {
             // Orchestrator may recurse (fulfilling tophat_retrieve tool_use calls via
             // base.SendAsync for each follow-up hop) and ultimately return a different response.
@@ -116,8 +129,11 @@ public sealed class TopHatHandler : DelegatingHandler
                 initialResponse: response,
                 sendUpstream: base.SendAsync,
                 localId: context.LocalId,
-                logger: this._logger);
-            response = await ccr.OrchestrateAsync(ccrContext, cancellationToken).ConfigureAwait(false);
+                logger: this._logger)
+			{
+				OwnsToolDefinition = context.CcrState!.OwnsToolDefinition,
+			};
+            response = await ccr!.OrchestrateAsync(ccrContext, cancellationToken).ConfigureAwait(false);
         }
 
         this.WrapResponse(response, context);
@@ -224,7 +240,7 @@ public sealed class TopHatHandler : DelegatingHandler
 
     private void DetectTarget(HttpRequestMessage request, TopHatRequestContext context)
     {
-        context.Target = this._detector.DetectTarget(request);
+        context.Target = this._detector.DetectTarget(request, context.Provider);
 
         if (context.Target == TopHatTarget.Unknown && context.Provider != TopHatProviderKind.Other)
         {

@@ -45,7 +45,7 @@ TopHat is a `DelegatingHandler` you wire into your `HttpClient` chain. Every req
 
 **Inbound (response side):**
 1. Response is parsed; if it contains a `tophat_retrieve` tool call, CCR fulfills it from an in-memory store of dropped items and re-dispatches upstream.
-2. The orchestrator loops up to `MaxIterations` (default 3) before giving up.
+2. The orchestrator allows up to `MaxIterations` retrieval rounds (default 3), then one final completion with explicit budget-exhausted results if retrieval is still requested.
 3. Cumulative token usage from all hops is summed into the final response's `usage` field so billing is accurate.
 4. Caller sees only the final response; the retrieval round-trips are invisible.
 
@@ -277,9 +277,30 @@ services.AddTopHatCCR(opt =>
 
 ### When CCR fires
 
-- Model emits a `tophat_retrieve` tool call → CCR fulfills + re-dispatches
-- If model also emits a caller-defined tool call alongside `tophat_retrieve` → CCR passes through unchanged (caller's tool loop handles it)
-- If iteration budget exhausted → CCR returns the last response as-is; caller may see an unfulfilled `tophat_retrieve` call (treat as a budget signal)
+- Model emits only internal `tophat_retrieve` calls → CCR fulfills them and re-dispatches.
+- Model also emits caller-defined tool calls → CCR removes the internal calls and returns the caller's calls, IDs, arguments, and order unchanged, without another upstream call.
+- Retrieval is still requested after the iteration budget → CCR supplies a budget-exhausted result for each pending internal call, withdraws the retrieval tool, and makes one final completion request. Any repeated internal calls in that completion are removed. Caller tool calls and genuine incomplete/error states remain intact.
+- Each client request makes at most `MaxIterations + 1` follow-up requests, or `MaxIterations + 2` total upstream calls. A zero allowance permits only the exhaustion completion. Mixed caller/internal calls return immediately even at the budget boundary.
+
+### Supported request modes and history recovery
+
+CCR-backed compression requires a registered orchestrator for the target. Registering an `ICompressionContextStore` alone does not enable it. Requests must allow the retrieval tool to be selected. A same-name tool with a different definition is treated as caller-owned: it is preserved and disables CCR-backed compression for that request. The canonical `CCRToolDefinition` identifies TopHat's internal tool.
+
+With CCR enabled, streaming requests (`stream: true`) retain their full tool-result payloads and receive no injected retrieval tool. Streaming compression without CCR keeps its existing behavior. Chat Completions CCR supports a single choice (`n` absent or `1`); multiple-choice requests and requests using deprecated `functions` or `function_call` settings retain their full data.
+
+Responses CCR requires explicit `store: false`, an array-form `input`, and caller-managed history. Requests with `previous_response_id`, `conversation`, or `background: true`, and requests that leave response storage enabled, retain their full data. OpenAI stores Responses by default; locally filtering output cannot remove an internal call from the server's stored response or later continuation. TopHat therefore does not inject internal tools into these modes. See [OpenAI conversation state](https://developers.openai.com/api/docs/guides/conversation-state).
+
+`AddTopHatCCR()` also repairs identifiable, previously leaked internal calls in explicit request history, even when compression is absent or skipped. Missing results receive an explicit unavailable-result message; duplicate or misplaced internal results are repaired according to the provider's pairing rules. Valid history is unchanged, and caller tool calls/results are preserved. An orphan result with no identifiable internal call is left alone: an opaque ID does not establish TopHat ownership, and server-managed history may contain its matching call.
+
+Repair runs after request transforms, so a transform's fail-open rollback cannot undo it. If a later transform disables retrieval, TopHat restores its original tool payloads before dispatch. Ambiguous edits to already compressed data or the injected tool definition fail locally instead of forwarding an unsafe request.
+
+Retries that reuse the request, or clone it together with its `HttpRequestMessage.Options`, retain private ownership evidence. TopHat restores its prior compression changes before running the transforms again, so retries cannot misclassify a cache-decorated internal tool as caller-owned or compound compression. Replacing owned artifacts ambiguously fails locally; copying options onto an unrelated request does not grant ownership of its tools. Shared Anthropic/OpenAI gateway hosts are classified by their provider endpoint, including configured path prefixes.
+
+For subsequent caller turns, retain the application's original full history and append returned assistant messages. Persisting TopHat's transformed outbound history and submitting it as a fresh request still has known ownership and data-recovery defects.
+
+Returned envelopes remove private calls and echoed private tool definitions/selections while preserving caller tools and metadata. Unexpected legacy Chat `function_call` entries for the private tool are removed without a hidden continuation. Successful responses after private tool advertisement or use must be inspectable JSON objects: `application/json`, `application/*+json`, and valid JSON with a missing content type are supported. Unexpected SSE, other media types, and malformed JSON raise `HttpRequestException` and dispose the response. Normal streaming requests and upstream HTTP errors keep their existing behavior.
+
+CCR requires inspectable JSON within `TopHatOptions.MaxBodyInspectionBytes` (default 10 MB). Unknown-length JSON is buffered up to that bound; oversized CCR requests fail before dispatch with an error naming the limit. Explicit TopHat bypass retains its existing behavior. Non-JSON and malformed JSON requests are forwarded without CCR processing.
 
 ### Cost accounting
 

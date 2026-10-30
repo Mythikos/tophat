@@ -33,6 +33,8 @@ public sealed class TopHatOptions
     /// Inspection extracts <c>stream</c> and <c>model</c> fields for accurate metrics tagging.
     /// Bodies larger than this (or with unknown Content-Length) skip inspection and fall back to
     /// header-based streaming detection with <c>model="unknown"</c>. Default: 10 MB.
+	/// When CCR is registered for the target, JSON history must be inspectable: unknown-length
+	/// JSON is buffered within this bound, and oversized requests fail before dispatch.
     /// </summary>
     public long MaxBodyInspectionBytes { get; set; } = 10L * 1024 * 1024;
 

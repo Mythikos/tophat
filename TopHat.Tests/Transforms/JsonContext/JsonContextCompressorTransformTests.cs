@@ -4,6 +4,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
 using TopHat.Compression.CCR;
+using TopHat.Compression.CCR.DependencyInjection;
 using TopHat.DependencyInjection;
 using TopHat.Relevance.BM25.DependencyInjection;
 using TopHat.Tests.Support;
@@ -284,15 +285,22 @@ public sealed class JsonContextCompressorTransformTests
 			services =>
 			{
 				services.AddTopHatBm25Relevance();
-				services.AddSingleton<IOptions<CCROptions>>(Options.Create(new CCROptions()));
-				services.AddSingleton<ICompressionContextStore, InMemoryCompressionContextStore>();
+				// Retrieval-backed compression requires an orchestrator, not only a storage service.
+				services.AddTopHatCCR();
 				services.AddTopHatJsonContextCompressor();
 			},
 			behavior: async (req, _) =>
 			{
 				var bytes = await req.Content!.ReadAsByteArrayAsync();
 				captured = JsonNode.Parse(bytes) as JsonObject;
-				return new HttpResponseMessage(HttpStatusCode.OK);
+				// CCR now rejects uninspectable successes after injection; use real terminal envelopes.
+				var terminal = req.RequestUri!.AbsolutePath switch
+				{
+					"/v1/messages" => """{"content":[{"type":"text","text":"Done."}],"stop_reason":"end_turn"}""",
+					"/v1/chat/completions" => """{"choices":[{"index":0,"message":{"role":"assistant","content":"Done."},"finish_reason":"stop"}]}""",
+					_ => """{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Done."}]}]}""",
+				};
+				return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(terminal, Encoding.UTF8, "application/json") };
 			});
 
 		return (client, () => Task.FromResult(captured), services.GetRequiredService<ICompressionContextStore>());
@@ -429,6 +437,7 @@ public sealed class JsonContextCompressorTransformTests
 			Content = new StringContent($$"""
 				{
 					"model": "gpt-4o",
+					"store": false,
 					"input": [
 						{ "role": "user", "content": "list logs" },
 						{ "type": "function_call", "call_id": "call_1", "name": "get_logs", "arguments": "{}" },

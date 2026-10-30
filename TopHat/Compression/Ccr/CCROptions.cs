@@ -21,13 +21,15 @@ public sealed class CCROptions
 	/// Maximum number of retrieval round-trips the orchestrator will make for a single client
 	/// request. Each round-trip is an extra upstream call. When the cap is hit, the orchestrator
 	/// terminates the loop by injecting a synthetic tool_result noting the budget exhaustion and
-	/// issues one final completion. Default: 3.
+	/// issues one final completion. Mixed caller/internal calls return to the caller without another
+	/// dispatch, with internal calls removed. Default: 3.
 	/// </summary>
 	/// <remarks>
 	/// Each iteration costs an additional upstream call (billed as input-token reprocessing), so
 	/// the cap is both a safety check against pathological models and a cost ceiling. Raise it
 	/// for workloads where multi-step retrieval is expected; lower it to 1 if you want a single
-	/// rescue opportunity and nothing more.
+	/// rescue opportunity. At most MaxIterations + 1 follow-up requests are sent, including the
+	/// exhaustion completion. Zero (or a negative value) permits only that final completion.
 	/// </remarks>
 	public int MaxIterations { get; set; } = 3;
 

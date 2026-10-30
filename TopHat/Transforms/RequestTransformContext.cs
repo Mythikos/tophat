@@ -51,6 +51,8 @@ public sealed class RequestTransformContext
     /// </summary>
     public JsonNode? Body { get; }
 
+	internal TopHat.Compression.CCR.CCRRequestState? CcrState { get; init; }
+
     /// <summary>
     /// Logger scoped to this transform invocation. <c>{LocalId}</c> and <c>{TransformName}</c> are
     /// already pushed to the scope by the pipeline — transforms should not set them manually.

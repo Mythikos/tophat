@@ -11,9 +11,11 @@ namespace TopHat.Compression.CCR;
 /// ever sees the terminal response — the retrieval hops are invisible.
 /// </summary>
 /// <remarks>
-/// Implementations are provider-specific (Anthropic / OpenAI) because the tool-use detection,
-/// follow-up message construction, and streaming-vs-buffered response shapes differ. Phase 1
-/// ships an Anthropic implementation only; OpenAI follows in Phase 2.
+/// Provider adapters share a bounded orchestration loop while preserving the Anthropic,
+/// Chat Completions, and Responses transcript shapes. Streaming requests must be excluded
+/// from CCR injection by the request boundary. Successful responses that cannot be safely
+/// inspected after private tool advertisement or use fail locally with an HTTP request exception.
+/// Unsupported responses without private tools and upstream HTTP errors retain pass-through behavior.
 /// </remarks>
 public interface ICCROrchestrator
 {
@@ -23,8 +25,9 @@ public interface ICCROrchestrator
 	/// <summary>
 	/// Runs the retrieval loop if the initial response contains a <c>tophat_retrieve</c> tool_use.
 	/// Returns the final response the caller should see — either the original response unchanged
-	/// (no retrieval needed / unsupported response shape / budget exhausted) or a new response
-	/// produced by one or more follow-up upstream calls.
+	/// (no retrieval needed) or a response produced by bounded
+	/// follow-up calls. Mixed and exhausted JSON responses remove TopHat-owned calls while
+	/// retaining caller-owned tools. One final completion communicates retrieval exhaustion.
 	/// </summary>
 	ValueTask<HttpResponseMessage> OrchestrateAsync(CCROrchestrationContext context, CancellationToken cancellationToken);
 }
@@ -34,6 +37,9 @@ public interface ICCROrchestrator
 /// </summary>
 public sealed class CCROrchestrationContext
 {
+	/// <summary>Provenance supplied by the handler for definitions injected during this request.</summary>
+	internal bool OwnsToolDefinition { get; init; }
+
 	public CCROrchestrationContext(
 		HttpRequestMessage originalRequest,
 		HttpResponseMessage initialResponse,

@@ -29,10 +29,16 @@ public sealed class OpenAIResponsesCCROrchestratorTests
 		return (new OpenAIResponsesCCROrchestrator(store, options), store);
 	}
 
-	private static HttpRequestMessage Request(string body = RequestBody) => new(HttpMethod.Post, "https://api.openai.com/v1/responses")
+	private static HttpRequestMessage Request(string body = RequestBody)
 	{
-		Content = new StringContent(body, Encoding.UTF8, "application/json"),
-	};
+		var parsed = JsonNode.Parse(body)!.AsObject();
+		parsed["store"] = false;
+		if (body == RequestBody)
+		{
+			parsed["tools"] = new JsonArray(CCRToolDefinition.BuildOpenAIResponsesToolDefinition());
+		}
+		return new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses") { Content = new StringContent(parsed.ToJsonString(), Encoding.UTF8, "application/json") };
+	}
 
 	private static HttpResponseMessage JsonResponse(string body) => new(HttpStatusCode.OK)
 	{
@@ -135,7 +141,7 @@ public sealed class OpenAIResponsesCCROrchestratorTests
 	}
 
 	[Fact]
-	public async Task ForeignFunctionCallAlongsideRetrieval_PassesThroughUnchanged()
+	public async Task ForeignFunctionCallAlongsideRetrieval_ReturnsOnlyCallerTool()
 	{
 		var (orchestrator, store) = BuildOrchestrator();
 		store.Store("k", new JsonNode[] { new JsonObject { ["id"] = 1 } });
@@ -158,6 +164,10 @@ public sealed class OpenAIResponsesCCROrchestratorTests
 		var result = await orchestrator.OrchestrateAsync(context, CancellationToken.None);
 
 		Assert.Same(initial, result);
+		var body = JsonNode.Parse(await result.Content.ReadAsStringAsync())!.AsObject();
+		var remaining = Assert.Single(body["output"]!.AsArray());
+		Assert.Equal("user_defined_tool", remaining!["name"]!.GetValue<string>());
+		Assert.Equal("fc_2", remaining["call_id"]!.GetValue<string>());
 	}
 
 	[Fact]
@@ -201,7 +211,7 @@ public sealed class OpenAIResponsesCCROrchestratorTests
 	}
 
 	[Fact]
-	public async Task StreamingContentType_PassesThrough()
+	public async Task StreamingContentType_AfterPrivateAdvertisement_IsRejected()
 	{
 		var (orchestrator, _) = BuildOrchestrator();
 		using var request = Request();
@@ -211,13 +221,11 @@ public sealed class OpenAIResponsesCCROrchestratorTests
 		};
 		var context = new CCROrchestrationContext(request, streaming, (_, _) => throw new InvalidOperationException(), "test", NullLogger.Instance);
 
-		var result = await orchestrator.OrchestrateAsync(context, CancellationToken.None);
-
-		Assert.Same(streaming, result);
+		await Assert.ThrowsAsync<HttpRequestException>(async () => await orchestrator.OrchestrateAsync(context, CancellationToken.None));
 	}
 
 	[Fact]
-	public async Task MaxIterations_StopsLoopingAndReturnsLastResponse()
+	public async Task MaxIterations_PerformsFinalCompletionAndRemovesRepeatedRetrieval()
 	{
 		var (orchestrator, store) = BuildOrchestrator(new CCROptions { MaxIterations = 2 });
 		store.Store("k", new JsonNode[] { new JsonObject { ["id"] = 1 } });
@@ -234,10 +242,11 @@ public sealed class OpenAIResponsesCCROrchestratorTests
 
 		var result = await orchestrator.OrchestrateAsync(context, CancellationToken.None);
 
-		Assert.Equal(2, callCount);
+		Assert.Equal(3, callCount);
 
 		var finalBody = JsonNode.Parse(await result.Content.ReadAsStringAsync())!.AsObject();
 		Assert.Equal("in_progress", finalBody["status"]!.GetValue<string>());
+		Assert.Empty(finalBody["output"]!.AsArray());
 	}
 
 	[Fact]

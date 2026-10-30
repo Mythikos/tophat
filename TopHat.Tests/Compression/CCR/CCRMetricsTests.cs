@@ -155,8 +155,8 @@ public sealed class CCRMetricsTests
 		Assert.Equal("budget_exhausted", orchestrations.Tag("outcome"));
 
 		var hops = capture.ForInstrument(HopsInstrument).Single();
-		// MaxIterations=2 → initial + 1 follow-up + bumped hopCount past last dispatch = 3.
-		Assert.Equal(3.0, hops.Value);
+		// Initial dispatch, two retrieval follow-ups, and one final exhaustion completion.
+		Assert.Equal(4.0, hops.Value);
 	}
 
 	[Fact]

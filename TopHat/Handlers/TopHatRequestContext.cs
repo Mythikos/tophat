@@ -60,6 +60,9 @@ internal sealed class TopHatRequestContext
     /// </summary>
     public byte[]? RequestBodyBytes { get; set; }
 
+	/// <summary>Per-request CCR capability and reversible compression state.</summary>
+	public TopHat.Compression.CCR.CCRRequestState? CcrState { get; set; }
+
     /// <summary>
     /// Flipped by <c>RequestTransformContext.MarkMutated</c>. When true at pipeline exit, the
     /// handler serializes <see cref="JsonBody"/> and replaces <c>request.Content</c>.

@@ -17,7 +17,7 @@ namespace TopHat.Transforms.JsonContext;
 /// Compresses JSON tool-result content in outgoing request bodies to reduce token usage.
 /// Targets Anthropic <c>/v1/messages</c> (tool_result blocks), OpenAI <c>/v1/chat/completions</c>
 /// (role:"tool" messages), and OpenAI <c>/v1/responses</c> (function_call_output items).
-/// Port of headroom's SmartCrusher — request-side only, stateless per request, no CCR/TOIN.
+	/// Registers retrievable dropped items when the handler can complete CCR for this request.
 /// </summary>
 /// <remarks>
 /// Requires at least one <see cref="IRelevanceScorer"/> to be registered in DI — typically via
@@ -79,6 +79,13 @@ public sealed class JsonContextCompressorTransform : IRequestTransform
 			return ValueTask.CompletedTask;
 		}
 
+		// Do not discard data when the registered retrieval mechanism cannot complete this request.
+		if (_ccrStore is not null && IsCCRSupportedTarget(context.Target) && (context.CcrState is null || !CCRRequestPolicy.CanRetrieve(body, context.Target, context.CcrState.OwnsToolDefinition)))
+		{
+			RecordSkip(context, "ccr_unavailable");
+			return ValueTask.CompletedTask;
+		}
+
 		// Compute frozen message count (messages that precede the sliding window of non-frozen turns).
 		var totalMessages = CountMessages(body, context.Target);
 		var frozenCount = Math.Max(0, totalMessages - _options.UnfrozenMessageCount);
@@ -95,11 +102,8 @@ public sealed class JsonContextCompressorTransform : IRequestTransform
 		// Extract query context once per request (expensive-ish, shared across all refs).
 		var queryContext = RelevanceContextExtractor.Extract(body, context.Target);
 
-		// CCR is opt-in: a store must be registered in DI AND the target must support tool injection.
-		// Anthropic /v1/messages, OpenAI /v1/chat/completions, and OpenAI /v1/responses all have
-		// orchestrators wired up; other targets fall through with no retrieval-key callback so CCR
-		// is transparently disabled for them.
-		var ccrActive = _ccrStore is not null && IsCCRSupportedTarget(context.Target);
+		// Both storage and the handler's per-request orchestration capability are required.
+		var ccrActive = _ccrStore is not null && context.CcrState is not null && IsCCRSupportedTarget(context.Target);
 		Func<IReadOnlyList<JsonNode>, string?>? ccrRegister = null;
 		var anyRetrievalKeyIssued = false;
 
@@ -114,6 +118,7 @@ public sealed class JsonContextCompressorTransform : IRequestTransform
 
 				var key = Guid.NewGuid().ToString("N");
 				_ccrStore!.Store(key, dropped);
+				context.CcrState!.RecordKey(key);
 				anyRetrievalKeyIssued = true;
 				return key;
 			};
@@ -198,6 +203,10 @@ public sealed class JsonContextCompressorTransform : IRequestTransform
 				continue;
 			}
 
+			if (ccrActive)
+			{
+				context.CcrState!.RecordCompression(toolResult, compressedText);
+			}
 			ToolResultRewriter.Rewrite(toolResult, compressedText);
 			totalCompressed++;
 
@@ -224,7 +233,9 @@ public sealed class JsonContextCompressorTransform : IRequestTransform
 		// array strategies that don't surface dropped items through the callback path.
 		if (anyRetrievalKeyIssued)
 		{
+			context.CcrState!.CreatedToolsProperty |= !body.ContainsKey("tools");
 			InjectCCRTool(body, context.Target);
+			context.CcrState.OwnsToolDefinition = true;
 		}
 
 		context.MarkMutated();

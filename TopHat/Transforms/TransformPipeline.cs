@@ -314,7 +314,10 @@ internal sealed class TransformPipeline
             context.JsonBody,
             this._logger,
             properties,
-            markMutated);
+            markMutated)
+		{
+			CcrState = context.CcrState,
+		};
         await transform.InvokeAsync(transformContext, cancellationToken).ConfigureAwait(false);
     }
 
